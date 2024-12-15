@@ -16,6 +16,7 @@ def buildFrontend():
         
         currentHash = dirhash('./ViteFrontend', 'md5')
         if (frontEndHash != currentHash):
+            subprocess.call(['npm', 'install'], cwd='./ViteFrontend')
             subprocess.call(['npm', 'run', 'build'], cwd='./ViteFrontend')
             print(f" Sucessfully built the front end files.")
             open("./pages/hash.txt", 'w').write(currentHash)
@@ -54,11 +55,26 @@ def support():
 # our server side post routes
 socket = SocketIO(app=app)
 
-@socket.event
+@socket.on("connected")
 def connect():
-    print("Client connected")
-    socket.emit("client_connected")
-    
+    socket.emit('connected',  {"message": "Connected to the support server"} )
+    return
+
+@socket.on("chat_started")
+def startChat():
+    # the user started a new chat
+    # receives the user info AND the chat transaction
+    # this places the user chat in the support queue
+    socket.emit('chat_started',  {"message": "Connected to the support server"} )
+    return
+
+@socket.on("send_message")
+def SyncChatMessages(data):
+    #print("New message: " + data["message"])
+    socket.emit('received_message', data )
+    return
+
+
 
 if __name__ == '__main__':
     socket.run(app)
