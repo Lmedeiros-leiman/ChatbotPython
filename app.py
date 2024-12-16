@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template
 from flask_socketio import SocketIO
 import subprocess
 from dirhash import dirhash
@@ -12,18 +12,20 @@ def buildFrontend():
         try:
             frontEndHash = open("./pages/hash.txt", 'r')
             frontEndHash = frontEndHash.read()
-        except FileNotFoundError: pass
+        except FileNotFoundError: 
+            pass
         
         currentHash = dirhash('./ViteFrontend', 'md5')
         if (frontEndHash != currentHash):
             subprocess.call(['npm', 'install'], cwd='./ViteFrontend')
             subprocess.call(['npm', 'run', 'build'], cwd='./ViteFrontend')
-            print(f" Sucessfully built the front end files.")
+            print(" Sucessfully built the front end files.")
             open("./pages/hash.txt", 'w').write(currentHash)
             
     except subprocess.CalledProcessError as e:
-        print(f"Error building the frontend when preparing the server: {e}")
-        raise
+        print(e)
+        raise SystemExit("Error building the frontend when preparing the server")
+        
 buildFrontend()    
 
 # prepares the server
@@ -55,10 +57,6 @@ def support():
 # our server side post routes
 socket = SocketIO(app=app)
 
-@socket.on("connected")
-def connect():
-    socket.emit('connected',  {"message": "Connected to the support server"} )
-    return
 
 @socket.on("chat_started")
 def startChat():

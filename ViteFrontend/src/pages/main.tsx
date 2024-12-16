@@ -4,9 +4,9 @@ import { createRoot } from 'react-dom/client'
 // include botstrap
 import 'bootstrap/dist/css/bootstrap.min.css'
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
+import SupportRequestPanel from '../components/SupportRequestPanel';
 //
 
-import SupportPanel from '../components/RequestSupport/SupportPanel.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,7 +14,7 @@ createRoot(document.getElementById('root')!).render(
       <h1>This is the Client side part</h1>
 
       <aside className=' position-fixed bottom-0 end-0'>
-        <SupportPanel />
+        <SupportRequestPanel />
       </aside>
       
 
