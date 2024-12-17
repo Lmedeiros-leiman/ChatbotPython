@@ -1,5 +1,5 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, join_room, leave_room, emit
 import subprocess
 from dirhash import dirhash
 
@@ -28,6 +28,10 @@ def buildFrontend():
         
 buildFrontend()    
 
+support_agents = set()
+client_requests = {}
+active_chats = {}
+
 # prepares the server
 app = Flask(__name__,
     static_folder='pages/',
@@ -36,14 +40,10 @@ app = Flask(__name__,
 
 app.config['SECRET_KEY'] = 'secret!'
 
-# serves our static files
+
 @app.route('/<path:path>')
 def serve_static(path):
     return app.send_static_file(path)
-
-
-#
-# our get routes
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -57,14 +57,42 @@ def support():
 # our server side post routes
 socket = SocketIO(app=app)
 
+@socket.on('connect', namespace='/support')
+def handleSupportConnect():
+    
+    socket.emit('send_message', {
+    "user": {
+        "name": "User",
+        "type": "user"},
+    "rawText": "yay",
+    "creation": "2024-12-17T01:24:07.442Z"
+    })
+    #socket.emit('received_message', {})
+    pass    
 
-@socket.on("chat_started")
-def startChat():
-    # the user started a new chat
-    # receives the user info AND the chat transaction
-    # this places the user chat in the support queue
-    socket.emit('chat_started',  {"message": "Connected to the support server"} )
-    return
+
+@socket.on("support_logged")
+def groupSupport():
+    pass
+
+
+@socket.on("support_joined")
+def connectSupport():
+    pass
+ 
+
+
+@socket.on("request_new_chat")
+def notifySupport(user):
+    
+    newChatInfo = {
+        'requester': user,
+        'request' : request
+    }
+    
+    socket.emit("chat_started", newChatInfo, namespace='/support')
+    
+    return;
 
 @socket.on("send_message")
 def SyncChatMessages(data):
