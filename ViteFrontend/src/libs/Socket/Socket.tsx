@@ -1,43 +1,77 @@
-import React, { useContext } from "react"
-import { io } from "socket.io-client"
-import AuthProvider from "../Auth/Auth"
+import React, { createContext, useContext, useEffect, useMemo } from "react"
+import { io, Socket } from "socket.io-client"
+import { UseAuth } from "../Auth/Auth"
 
 
-const socketContext = React.createContext(io('http://127.0.0.1:5000/'))
+const SOCKET_URL = 'http://127.0.0.1:5000';
 
-export const useSocket = () => {
-    return useContext(socketContext)
-}
+// Create separate contexts for general and support sockets
+const GeneralSocketContext = createContext<Socket | null>(null);
+const SupportSocketContext = createContext<Socket | null>(null);
 
-export default function SocketProvider({children}: {children: React.ReactNode}) {
-    const socket = useContext(socketContext)
+export const useGeneralSocket = () => {
+    return useContext(GeneralSocketContext);
+};
 
-    //primitive socketIO events
-    socket.on("connect", () => {
-        console.log("Connected to the server.")
-    })
+export const useSupportSocket = () => {
+    return useContext(SupportSocketContext);
+};
 
-    socket.on("disconnect", (reason) => {
-        console.log("Disconnected from the server: " + reason)
-    })
+export default function SocketProvider({ children }: { children: React.ReactNode }) {
+    const localUser = UseAuth();
 
-    socket.on("connect_error", (err) => {
-        console.error("Connection error:", err);
-    });
+    // Use `useMemo` to initialize sockets only once
+    const generalSocket = useMemo(() => io(SOCKET_URL), []);
+    const supportSocket = useMemo(() => (localUser?.type === 'support' ? io(`${SOCKET_URL}/support`) : null), [localUser]);
 
-    socket.on("connect_timeout", () => {
-        console.warn("Connection to the server timed out.")
-    });
-    
-    // we start the socket, check for a connection saved in localstorage and connect to it IF its still open.
+    useEffect(() => {
+        // General socket connection logic
+        generalSocket.on('connect', () => {
+            console.log('Connected to general socket');
+        });
 
+        generalSocket.on('disconnect', () => {
+            console.log('Disconnected from general socket');
+        });
 
+        // Example: handle client-specific events
+        generalSocket.on('chat_started', () => {
+            alert('CHAT STARTED BY CLIENT');
+        });
 
-    return(
-        <AuthProvider >
-            <socketContext.Provider value={socket}>
+        return () => {
+            generalSocket.disconnect();
+        };
+    }, [generalSocket]);
+
+    useEffect(() => {
+        // Support socket connection logic
+        if (supportSocket) {
+            supportSocket.on('connect', () => {
+                console.log('Connected to support socket');
+                supportSocket.emit('support_logged', localUser);
+            });
+
+            supportSocket.on('disconnect', () => {
+                console.log('Disconnected from support socket');
+            });
+
+            // Example: handle support team events
+            supportSocket.on('new_support_request', (data) => {
+                console.log('New support request:', data);
+            });
+
+            return () => {
+                supportSocket.disconnect();
+            };
+        }
+    }, [supportSocket, localUser]);
+
+    return (
+        <GeneralSocketContext.Provider value={generalSocket}>
+            <SupportSocketContext.Provider value={supportSocket}>
                 {children}
-            </socketContext.Provider>
-        </AuthProvider>
-    )
+            </SupportSocketContext.Provider>
+        </GeneralSocketContext.Provider>
+    );
 }
