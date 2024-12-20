@@ -11,6 +11,7 @@ import { User } from "../../libs/Auth/Auth"
 
 export type ChatMessage = {
     user: User,
+    chatRoom: "" | string,
     rawText: string,
     creation: Date | number,
 }
@@ -18,11 +19,19 @@ export type ChatMessage = {
 
 export const Message : React.FC<ChatMessage> = ({user, rawText, creation}) => {
     
-    
+    if (user.type == "server") {
+        return (
+            <article>
+                <ReactMarkdown>{rawText}</ReactMarkdown>
+            </article>
+        )
+    }
+
+
+    const date = (creation as Date).toLocaleDateString()
     
     return (<article>
-        <span>{user.name} <sub>{(creation as Date).toLocaleDateString()} {}</sub></span>
+        <span>{user.name} <sub>{creation == 0 ? "" : date} {}</sub></span>
         <ReactMarkdown>{rawText}</ReactMarkdown>
     </article>)
 }
-

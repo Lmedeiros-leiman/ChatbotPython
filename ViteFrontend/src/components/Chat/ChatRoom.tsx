@@ -10,29 +10,30 @@ import { useEffect, useState } from "react"
 import { UseAuth, User } from "../../libs/Auth/Auth"
 import Input from "./Input"
 import { ChatMessage, Message } from "./Message"
-import { useGeneralSocket } from "../../libs/Socket/Socket"
+import { useSocket } from "../../libs/Socket/Socket"
 import { Socket } from "socket.io-client"
 
 
 export type ChatRoomProps = {
-    id?: string,
+    roomDetails?: ChatDetails,
+    disabled?: boolean
 }
 
 
 export type ChatDetails = {
     user: User,
-    id: string,
+    room: string,
     history: ChatMessage[],
     locked: boolean,
 }
 
 
-export const ChatRoom: React.FC<ChatRoomProps> = ({ id = "pending" }) => {
+export const ChatRoom: React.FC<ChatRoomProps> = ({ roomDetails, disabled=false }) => {
     const localUser = UseAuth();
-    const socket = useGeneralSocket() as Socket;
+    const socket = useSocket() as Socket;
     //
     const [chatDetails, setChatDetails] = useState<ChatDetails>({
-        id: id,
+        room: roomDetails?.room || "",
         history: [],
         locked: false,
         user: localUser,
@@ -40,71 +41,64 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ id = "pending" }) => {
 
     useEffect(() => {
         socket.on("received_message", (newMessage: ChatMessage) => {
-            console.log(newMessage)
             newMessage.creation = new Date(newMessage.creation)
             setChatDetails((prevChatData) => ({
                 ...prevChatData,
-                history: [...prevChatData.history, newMessage]
+                history: [...prevChatData.history, newMessage ]
             }));
         });
+
+        socket.on("received_chat_history", (chatHistory : ChatMessage[]) => {
+            setChatDetails((prevChatData) => ({
+                ...prevChatData,
+                history: [...chatHistory, ...prevChatData.history]
+            }))
+        })
 
         socket.on("support_joined", () => {
 
         });
+
 
         return () => {
             socket.off()
         }
     }, [])
 
+    if (roomDetails?.room === "" && localUser.type == "support") {
+        return (<>
+        </>)
+    }
 
     return (<>
+        <div className="d-flex flex-column h-100">
+        {/* Chat History */}
         <article className="flex-grow-1 overflow-auto p-1 border border-1">
-            {chatDetails && chatDetails.history.map((message) => <Message {...message} />)}
+            {chatDetails &&
+                chatDetails.history.map((message) => (
+                    <Message {...message} key={message.creation as number} />
+                ))}
         </article>
-        <aside>
-            <Input onSend={(message) => {
-                const newMessage: ChatMessage = {
-                    user: localUser,
-                    rawText: message,
-                    creation: new Date().getTime(),
-                };
 
-                socket.emit("send_message", newMessage);
-
-                if (chatDetails.id === "pending") {
-                    if (localUser.type != "user") { return; }
-                    socket.emit("request_new_chat", localUser);
-
-                    setChatDetails((prevChatDetails) => ({
-                        ...prevChatDetails,
-                        id: "waiting",
-                    }));
-
-                    const waitNewChatId = setTimeout(() => {
-                        setChatDetails((prevChatDetails) => ({
-                            ...prevChatDetails,
-                            id: "pending",
-                        }));
-                    }, 60000); // wait 60 seconds before giving up
-
-                    const handleChatStarted = (data: { id: string }) => {
-                        clearTimeout(waitNewChatId);
-                        setChatDetails((prevChatDetails) => ({
-                            ...prevChatDetails,
-                            id: data.id,
-                        }));
+        {/* Input Field */}
+        <aside className="border-top p-2 bg-light">
+            <Input
+                disabled={disabled}
+                onSend={(message) => {
+                    const newMessage: ChatMessage = {
+                        user: localUser,
+                        chatRoom: roomDetails?.room || "",
+                        rawText: message,
+                        creation: new Date().getTime(),
                     };
 
-                    socket.on("chat_started", handleChatStarted);
-
-                    // Clean up listener on component unmount
-                    return () => {
-                        socket.off("chat_started", handleChatStarted);
-                    };
-                }
-            }} />
+                    
+                    
+                    socket.emit("send_message", newMessage);
+                }}
+            />
         </aside>
+    </div>
     </>)
 }
 export default ChatRoom;

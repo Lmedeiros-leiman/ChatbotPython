@@ -1,7 +1,11 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, join_room, leave_room, emit
+from flask_cors import CORS
+
+import random
 import subprocess
 from dirhash import dirhash
+
 
 # builds the frontend before servind the app
 def buildFrontend():
@@ -28,17 +32,16 @@ def buildFrontend():
         
 buildFrontend()    
 
-support_agents = set()
-client_requests = {}
-active_chats = {}
 
 # prepares the server
 app = Flask(__name__,
     static_folder='pages/',
     template_folder='pages/'
+    
 )
-
 app.config['SECRET_KEY'] = 'secret!'
+CORS(app)
+
 
 
 @app.route('/<path:path>')
@@ -55,50 +58,83 @@ def support():
 
 #
 # our server side post routes
-socket = SocketIO(app=app)
+socket = SocketIO(app=app, cors_allowed_origins="*")
 
-@socket.on('connect', namespace='/support')
-def handleSupportConnect():
+
+# key = Socket ID
+# content : user that is connected.
+connectedUsers = {}
+connectedSupportUsers = {}
+
+# key = UserChatRoom ID
+# content = chat message history
+# to allow multiple chats we save them to disk and clear the current chat history.
+ChatRooms = {}
+
+
+
+ServerUser = {
+    'name': "Server",
+    'type': "server"
+}
+
+@socket.on('connect')
+def userConnected(connectingUser):
+    print(connectingUser)
     
-    socket.emit('send_message', {
-    "user": {
-        "name": "User",
-        "type": "user"},
-    "rawText": "yay",
-    "creation": "2024-12-17T01:24:07.442Z"
-    })
-    #socket.emit('received_message', {})
-    pass    
-
-
-@socket.on("support_logged")
-def groupSupport():
-    pass
-
-
-@socket.on("support_joined")
-def connectSupport():
-    pass
- 
-
-
-@socket.on("request_new_chat")
-def notifySupport(user):
-    
-    newChatInfo = {
-        'requester': user,
-        'request' : request
+    serverResponse = {
+        'user': ServerUser,
+        'rawText': "Connected to the server.",
+        'creation': 0
     }
     
-    socket.emit("chat_started", newChatInfo, namespace='/support')
+    if connectingUser['type'] == "support":
+        # if we have a support logging in
+        connectedSupportUsers[request.sid] = connectingUser
+        #join_room(room='supportChannel')
+        join_room(room=connectingUser["id"])
+        
+    socket.emit(event='received_message', data=serverResponse, to=request.sid)
     
-    return;
+    
+    pass    
+
+@socket.on("request_support")
+def requestSupport():
+    
+    randomSupportUser = connectedSupportUsers[random.choice(list(connectedSupportUsers.keys()))]
+    
+    print(randomSupportUser)
+    pass
+
 
 @socket.on("send_message")
-def SyncChatMessages(data):
-    #print("New message: " + data["message"])
-    socket.emit('received_message', data )
-    return
+def sendMessageToChatRoom(userMessage):
+    user = userMessage["user"]
+    targetRoom = userMessage["chatRoom"] or user["id"]  # Default to user ID if no chatRoom specified
+    
+    # checks if the user has a chatRoom for itself
+    # aka: checks if its an support user.
+    # if it does not exist, join into a room and alert the support user of the new chat.
+    if (not ChatRooms.get(targetRoom)):
+        # Initialize room if it doesn't exist
+        ChatRooms[targetRoom] = {
+            'users': [user],
+            'history': []
+        }
+        join_room(room=targetRoom, sid=request.sid)
+
+        # Notify support of the new chat
+        socket.emit("chat_started", {"roomID": targetRoom, "requester": user}, to="supportChannel")
+        
+    # Save message to history
+    ChatRooms[targetRoom]['history'].append(userMessage)
+
+    # Send the message to all in the room
+    
+    
+    
+    socket.emit('received_message', data=userMessage, to=targetRoom)
 
 
 
